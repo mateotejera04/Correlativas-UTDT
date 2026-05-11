@@ -253,7 +253,7 @@ function App() {
           alt="MicroDiTella"
           width="80"
           height="80"
-          onClick={() => window.open("https://www.utdt.edu/ver_contenido.php?id_contenido=19866&id_item_menu=31534", '_blank', 'noopener,noreferrer')} />
+          onClick={() => window.open(carrera.url || "https://www.utdt.edu/ver_contenido.php?id_contenido=19866&id_item_menu=31534", '_blank', 'noopener,noreferrer')} />
       </div>
       <div style={{
         position: 'absolute',
