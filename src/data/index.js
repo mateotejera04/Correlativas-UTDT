@@ -5,6 +5,9 @@ import * as administracionEmpresas from './administracionEmpresas';
 import * as abogacia from './abogacia';
 import * as arquitectura from './arquitectura';
 import * as cienciaPolitica from './cienciaPolitica';
+import * as cienciasSociales from './cienciasSociales';
+import * as diseno from './diseno';
+import * as economia from './economia';
 
 export const carreras = [
     {
@@ -55,6 +58,27 @@ export const carreras = [
         nodes: cienciaPolitica.nodes,
         edges: cienciaPolitica.edges,
         year_labels: cienciaPolitica.year_labels,
+    },
+    {
+        id: 'ciencias-sociales',
+        name: 'Licenciatura en Ciencias Sociales',
+        nodes: cienciasSociales.nodes,
+        edges: cienciasSociales.edges,
+        year_labels: cienciasSociales.year_labels,
+    },
+    {
+        id: 'diseno',
+        name: 'Carrera de Diseño',
+        nodes: diseno.nodes,
+        edges: diseno.edges,
+        year_labels: diseno.year_labels,
+    },
+    {
+        id: 'economia',
+        name: 'Licenciatura en Economía',
+        nodes: economia.nodes,
+        edges: economia.edges,
+        year_labels: economia.year_labels,
     },
 ];
 
