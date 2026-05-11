@@ -1,5 +1,5 @@
 import './App.css';
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import ReactFlow, {
   addEdge,
   Controls,
@@ -10,7 +10,7 @@ import ReactFlow, {
 } from 'react-flow-renderer';
 import CourseNode from './CourseNode.js';
 import YearNode from './YearNode.js';
-import { carreras, defaultCarreraId } from './data';
+import { carreras } from './data';
 import { toPng } from 'html-to-image';
 
 const nodeTypes = { course: CourseNode, year: YearNode };
@@ -67,14 +67,17 @@ const screenshot = () => {
 };
 
 function App() {
-  const [carreraId, setCarreraId] = useState(defaultCarreraId);
+  const [carreraId, setCarreraId] = useState('');
   const carrera = useMemo(
-    () => carreras.find((c) => c.id === carreraId) || carreras[0],
+    () => carreras.find((c) => c.id === carreraId) || null,
     [carreraId]
   );
 
   // Datos derivados por carrera: clonamos nodos y calculamos handles, edges, corrAmm
   const { initialNodes, initialEdges, years, corrAmm, pathFor } = useMemo(() => {
+    if (!carrera) {
+      return { initialNodes: [], initialEdges: [], years: [], corrAmm: {}, pathFor: () => [] };
+    }
     const years = carrera.year_labels;
     const initialEdges = carrera.edges;
 
@@ -115,6 +118,23 @@ function App() {
   const [preLabel, setPreLabel] = useState("");
   const [clickedCourse, setClickedCourse] = useState("");
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const sortedCarreras = useMemo(
+    () => [...carreras].sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    []
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Cuando cambia la carrera, resetear vista
   useEffect(() => {
@@ -216,68 +236,97 @@ function App() {
 
   return (
     <div className="App">
-      {/* Selector de carrera */}
-      <div style={{
-        position: 'absolute',
-        top: '15px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 12,
-        fontFamily: '"Inter", sans-serif',
-      }}>
-        <select
-          value={carreraId}
-          onChange={(e) => setCarreraId(e.target.value)}
-          style={{
-            backgroundColor: "#1E1E1E",
-            color: "#FFDD55",
-            padding: "6px 12px",
-            borderRadius: 5,
-            border: "1px solid #333",
-            fontFamily: '"Inter", sans-serif',
-            fontSize: '14px',
-            cursor: 'pointer',
-            outline: 'none',
-          }}
-        >
-          {[...carreras].sort((a, b) => a.name.localeCompare(b.name, 'es')).map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <img
-          style={{ cursor: 'pointer', position: 'absolute', bottom: 10, right: 10, zIndex: 10, objectFit: 'cover' }}
-          src="micro_ditella_dark.png"
-          alt="MicroDiTella"
-          width="80"
-          height="80"
-          onClick={() => window.open(carrera.url || "https://www.utdt.edu/ver_contenido.php?id_contenido=19866&id_item_menu=31534", '_blank', 'noopener,noreferrer')} />
-      </div>
-      <div style={{
-        position: 'absolute',
-        top: '60px',
-        width: "100vw",
-        zIndex: 11,
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        color: "#aaa",
-        fontFamily: '"Inter", sans-serif',
-      }}>
+      {/* Título del welcome (solo cuando no hay carrera seleccionada) */}
+      {!carrera && (
         <div style={{
-          backgroundColor: "#1E1E1E",
-          padding: "2px",
-          borderRadius: "5px",
-          width: 'auto',
-          height: 'auto',
-          zIndex: 20,
+          position: 'absolute',
+          top: '22%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 11,
+          textAlign: 'center',
+          color: '#aaa',
           fontFamily: '"Inter", sans-serif',
+          width: '90%',
+          maxWidth: '600px',
         }}>
-          {label}
+          <h1 style={{ color: '#FFDD55', fontSize: '36px', marginBottom: '12px', fontWeight: 600 }}>
+            Correlativas UTDT
+          </h1>
+          <p style={{ fontSize: '17px', lineHeight: 1.5 }}>
+            Mapa interactivo de las materias y correlatividades de las carreras de grado de la Universidad Torcuato Di Tella.
+          </p>
+        </div>
+      )}
+
+      {/* Selector de carrera custom */}
+      <div className={`carrera-dropdown-wrapper ${carrera ? 'compact' : 'welcome'}`}>
+        <div
+          ref={dropdownRef}
+          className={`carrera-dropdown${dropdownOpen ? ' open' : ''}${!carrera ? ' welcome' : ''}`}
+        >
+          <button
+            type="button"
+            className="carrera-dropdown-button"
+            onClick={() => setDropdownOpen((o) => !o)}
+          >
+            <span>{carrera ? carrera.name : 'Seleccioná tu carrera'}</span>
+            <span className="carrera-dropdown-arrow">▾</span>
+          </button>
+          <div className="carrera-dropdown-list">
+            {sortedCarreras.map((c) => (
+              <div
+                key={c.id}
+                className={`carrera-dropdown-item${c.id === carreraId ? ' selected' : ''}`}
+                onClick={() => {
+                  setCarreraId(c.id);
+                  setDropdownOpen(false);
+                }}
+              >
+                {c.name}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+
+      {carrera && (
+        <div>
+          <img
+            style={{ cursor: 'pointer', position: 'absolute', bottom: 10, right: 10, zIndex: 10, objectFit: 'cover' }}
+            src="micro_ditella_dark.png"
+            alt="MicroDiTella"
+            width="80"
+            height="80"
+            onClick={() => window.open(carrera.url || "https://www.utdt.edu/ver_contenido.php?id_contenido=19866&id_item_menu=31534", '_blank', 'noopener,noreferrer')} />
+        </div>
+      )}
+
+      {carrera && (
+        <div style={{
+          position: 'absolute',
+          top: '60px',
+          width: "100vw",
+          zIndex: 11,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          color: "#aaa",
+          fontFamily: '"Inter", sans-serif',
+        }}>
+          <div style={{
+            backgroundColor: "#1E1E1E",
+            padding: "2px",
+            borderRadius: "5px",
+            width: 'auto',
+            height: 'auto',
+            zIndex: 20,
+            fontFamily: '"Inter", sans-serif',
+          }}>
+            {label}
+          </div>
+        </div>
+      )}
       <div style={{
         position: 'absolute',
         bottom: '20px',
