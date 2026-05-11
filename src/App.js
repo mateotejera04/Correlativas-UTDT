@@ -1,5 +1,5 @@
 import './App.css';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import ReactFlow, {
   addEdge,
   Controls,
@@ -10,56 +10,15 @@ import ReactFlow, {
 } from 'react-flow-renderer';
 import CourseNode from './CourseNode.js';
 import YearNode from './YearNode.js';
-import { nodes as initialNodes, edges as initialEdges, year_labels as years } from './courses';
+import { carreras, defaultCarreraId } from './data';
 import { toPng } from 'html-to-image';
 
-const nodeTypes = { course: CourseNode , year: YearNode};
-
-const onInit = (reactFlowInstance, setReactFlowInstance) => {
-  setReactFlowInstance(reactFlowInstance)
-  document.querySelector('.reactFlowBackgroundPattern').onClick = () => {
-    console.log("background clicked");
-  }
-}
-
-var lefts = [];
-var rights = [];
-var full_edges = [];
-initialEdges.forEach(e => {
-  full_edges.push([e.source, e.target])
-  lefts.push(e.target);
-  rights.push(e.source);
-})
-
-var ids = [];
-initialNodes.forEach(n => {
-  ids.push(n.id)
-  if (lefts.includes(n.id)) {
-    n.data.hasLeft = true;
-  }
-  if (rights.includes(n.id)) {
-    n.data.hasRight = true;
-  }
-});
-
-var corrAmm = {};
-var corrAmmLis = [];
-ids.forEach(
-  (id) => {
-    var thisPath = path(id);
-    corrAmm[id] = thisPath.length - 1;
-    corrAmmLis.push([id, thisPath.length - 1])
-  }
-)
-corrAmmLis = corrAmmLis.sort(function (a, b) {
-  return b[1] - a[1];
-})
+const nodeTypes = { course: CourseNode, year: YearNode };
 
 function onlyUnique(value, index, self) {
   return self.indexOf(value) === index;
 }
 
-// Graph nodes after node n
 function forward_path(n, edges) {
   var nodes = [];
   edges.forEach(function (edge) {
@@ -73,7 +32,6 @@ function forward_path(n, edges) {
   return nodes.filter(onlyUnique);
 }
 
-// Graph nodes before node n
 function backward_path(n, edges) {
   var nodes = [];
   edges.forEach(function (edge) {
@@ -87,46 +45,9 @@ function backward_path(n, edges) {
   return nodes.filter(onlyUnique);
 }
 
-// Graph nodes before and after node n
-function path(n) {
-  return forward_path(n, full_edges).concat(backward_path(n, full_edges)).concat([n]);
-}
-
-// Filter nodes by ID
-function filterNodesByID(id) {
-  var nodes = [];
-  initialNodes.forEach(function (node) {
-    if (path(id).includes(node.id)) {
-      nodes.push(node);
-    }
-  });
-  return nodes;
-}
-
-// Filter nodes by year
-function filterNodesByYear(year) {
-  var nodes = [];
-  initialNodes.forEach(function (node) {
-    if (node.data.year === year) {
-      nodes.push(node);
-    }
-  });
-  return nodes;
-}
-
-function course_by_id(id) {
-  var course = null;
-  initialNodes.forEach(function (node) {
-    if (node.id === id) {
-      course = node;
-    }
-  });
-  return course;
-}
-
 function downloadImage(dataUrl) {
   const a = document.createElement('a');
-  a.setAttribute('download', 'Correlativas_LTD_UTDT.png');
+  a.setAttribute('download', 'Correlativas_UTDT.png');
   a.setAttribute('href', dataUrl);
   a.click();
 }
@@ -140,118 +61,191 @@ const screenshot = () => {
       ) {
         return false;
       }
-
       return true;
     },
   }).then(downloadImage);
 };
 
-const getNodeYear = (year) => {
-  return years.filter(y => y.id === year)[0];
-}
-
 function App() {
-  const [nodes, setNodes, onNodesChange] = useNodesState(years.concat(initialNodes));
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const [carreraId, setCarreraId] = useState(defaultCarreraId);
+  const carrera = useMemo(
+    () => carreras.find((c) => c.id === carreraId) || carreras[0],
+    [carreraId]
+  );
+
+  // Datos derivados por carrera: clonamos nodos y calculamos handles, edges, corrAmm
+  const { initialNodes, initialEdges, years, corrAmm, pathFor } = useMemo(() => {
+    const years = carrera.year_labels;
+    const initialEdges = carrera.edges;
+
+    const lefts = [];
+    const rights = [];
+    const fullEdges = [];
+    initialEdges.forEach((e) => {
+      fullEdges.push([e.source, e.target]);
+      lefts.push(e.target);
+      rights.push(e.source);
+    });
+
+    const initialNodes = carrera.nodes.map((n) => ({
+      ...n,
+      data: {
+        ...n.data,
+        hasLeft: lefts.includes(n.id),
+        hasRight: rights.includes(n.id),
+      },
+    }));
+
+    const pathFor = (id) =>
+      forward_path(id, fullEdges).concat(backward_path(id, fullEdges)).concat([id]);
+
+    const corrAmm = {};
+    initialNodes.forEach((n) => {
+      corrAmm[n.id] = pathFor(n.id).length - 1;
+    });
+
+    return { initialNodes, initialEdges, years, corrAmm, pathFor };
+  }, [carrera]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const onConnect = useCallback((params) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
   const [pathview, setPathview] = useState(true);
   const [label, setLabel] = useState("Clickea en una materia para ver todas sus correlativas");
   const [preLabel, setPreLabel] = useState("");
   const [clickedCourse, setClickedCourse] = useState("");
-
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
-  //const [fitView, setFitView] = useState((e) => {console.log(e)});
+
+  // Cuando cambia la carrera, resetear vista
+  useEffect(() => {
+    setNodes(years.concat(initialNodes));
+    setEdges(initialEdges);
+    setClickedCourse("");
+    setPathview(false);
+    setLabel("Clickea en una materia para ver todas sus correlativas");
+  }, [years, initialNodes, initialEdges, setNodes, setEdges]);
+
+  const filterNodesByID = (id) => {
+    const p = pathFor(id);
+    return initialNodes.filter((n) => p.includes(n.id));
+  };
+
+  const filterNodesByYear = (year) => initialNodes.filter((n) => n.data.year === year);
+
+  const courseById = (id) => initialNodes.find((n) => n.id === id);
+
+  const getNodeYear = (year) => years.find((y) => y.id === year);
 
   const updateNodes = (id, reducedView) => {
-    setPathview(reducedView)
+    setPathview(reducedView);
     if (reducedView) {
       setNodes(filterNodesByID(id));
-      //setNodes(years.concat(filterNodesByID(id)));
-    }
-    else {
+    } else {
       setNodes(years.concat(initialNodes));
     }
     setEdges(initialEdges);
-  }
+  };
+
+  const reset = () => {
+    updateNodes(null, false);
+    setLabel("Clickea en una materia para ver todas sus correlativas");
+  };
 
   const nodeClick = (event, element) => {
     if (element.type === "course") {
       if (clickedCourse !== element.id) {
         setClickedCourse(element.id);
         updateNodes(element.id, true);
-        setClickedCourse(element.id);
         if (!pathview) {
-          setLabel("Clickea en una materia para ver todas sus correlativas")
+          setLabel("Clickea en una materia para ver todas sus correlativas");
+        } else {
+          setLabel("Clickea en cualquier materia para resetear vista");
         }
-        else {
-          setLabel("Clickea en cualquier materia para resetear vista")
-        }
-      }
-      else {
-        reset()
+      } else {
+        reset();
         setClickedCourse(null);
       }
-    }
-    else if (element.type === "year") {
+    } else if (element.type === "year") {
       setNodes(filterNodesByYear(element.id).concat(getNodeYear(element.id)));
       setEdges(initialEdges);
-      setLabel("Clickea en cualquier materia para resetear vista")
+      setLabel("Clickea en cualquier materia para resetear vista");
     }
-  }
+  };
 
   const mapClick = (e) => {
     if (e.target.className === "react-flow__pane react-flow__container") {
-      reset()
+      reset();
     }
-  }
+  };
 
   const nodeMouseEnter = (event, element) => {
-    setPreLabel(label)
+    setPreLabel(label);
+    const courseLabel = courseById(element.id)?.data?.label?.props?.children;
     if (element.id !== clickedCourse) {
       if (corrAmm[element.id] > 1) {
-        setLabel("Clickea en " + course_by_id(element.id).data.label.props.children + " para ver sus " + corrAmm[element.id] + " correlativas")
+        setLabel("Clickea en " + courseLabel + " para ver sus " + corrAmm[element.id] + " correlativas");
+      } else if (corrAmm[element.id] === 1) {
+        setLabel("Clickea en " + courseLabel + " para ver su correlativa");
+      } else {
+        setLabel(courseLabel + " no tiene correlativas");
       }
-      else if (corrAmm[element.id] === 1) {
-        setLabel("Clickea en " + course_by_id(element.id).data.label.props.children + " para ver su correlativa")
-      }
-      else {
-        setLabel(course_by_id(element.id).data.label.props.children + " no tiene correlativas")
-      }
-    }
-    else {
+    } else {
       if (corrAmm[element.id] > 1) {
-        setLabel(course_by_id(element.id).data.label.props.children + " tiene " + corrAmm[element.id] + " correlativas")
-      }
-      else if (corrAmm[element.id] === 1) {
-        setLabel(course_by_id(element.id).data.label.props.children + " tiene 1 correlativa")
-      }
-      else if (corrAmm[element.id] === 0) {
-        setLabel(course_by_id(element.id).data.label.props.children + " no tiene correlativas")
-      }
-      else {
+        setLabel(courseLabel + " tiene " + corrAmm[element.id] + " correlativas");
+      } else if (corrAmm[element.id] === 1) {
+        setLabel(courseLabel + " tiene 1 correlativa");
+      } else if (corrAmm[element.id] === 0) {
+        setLabel(courseLabel + " no tiene correlativas");
+      } else {
         setLabel("Clickea en una materia para ver todas sus correlativas");
       }
     }
-  }
+  };
 
-  const nodeMouseLeave = (event, element) => {
-    setLabel("Clickea en una materia para ver todas sus correlativas")
-  }
-
-  const reset = () => {
-    updateNodes(null, false)
-    setLabel("Clickea en una materia para ver todas sus correlativas")
-  }
+  const nodeMouseLeave = () => {
+    setLabel("Clickea en una materia para ver todas sus correlativas");
+  };
 
   useEffect(() => {
     if (reactFlowInstance) {
       reactFlowInstance.fitView({ duration: 800, padding: 0.1, center: true });
-
     }
   }, [nodes, reactFlowInstance]);
-  
+
+  const onInit = (instance) => setReactFlowInstance(instance);
+
   return (
     <div className="App">
+      {/* Selector de carrera */}
+      <div style={{
+        position: 'absolute',
+        top: '15px',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        zIndex: 12,
+        fontFamily: '"Inter", sans-serif',
+      }}>
+        <select
+          value={carreraId}
+          onChange={(e) => setCarreraId(e.target.value)}
+          style={{
+            backgroundColor: "#1E1E1E",
+            color: "#FFDD55",
+            padding: "6px 12px",
+            borderRadius: 5,
+            border: "1px solid #333",
+            fontFamily: '"Inter", sans-serif',
+            fontSize: '14px',
+            cursor: 'pointer',
+            outline: 'none',
+          }}
+        >
+          {carreras.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+
       <div>
         <img
           style={{ cursor: 'pointer', position: 'absolute', bottom: 10, right: 10, zIndex: 10, objectFit: 'cover' }}
@@ -259,7 +253,7 @@ function App() {
           alt="MicroDiTella"
           width="80"
           height="80"
-          onClick={(event) => window.open("https://www.utdt.edu/ver_contenido.php?id_contenido=19866&id_item_menu=31534", '_blank', 'noopener,noreferrer')} />
+          onClick={() => window.open("https://www.utdt.edu/ver_contenido.php?id_contenido=19866&id_item_menu=31534", '_blank', 'noopener,noreferrer')} />
       </div>
       <div style={{
         position: 'absolute',
@@ -326,7 +320,7 @@ function App() {
         nodesDraggable={true}
         nodesConnectable={false}
         onConnect={onConnect}
-        onInit={(instance) => onInit(instance, setReactFlowInstance)}
+        onInit={onInit}
         fitView={true}
         attributionPosition="top-right"
         nodeTypes={nodeTypes}
@@ -337,30 +331,27 @@ function App() {
       >
         <Controls
           style={{ color: '#4A4A4A', backgroundColor: '#181818', borderRadius: '2px', padding: '5px', zIndex: 100 }}
-          //onFitView={() => updateNodes(setNodes, setEdges, null, false, setPathview)}
           showInteractive={false}
         >
           <ControlButton onClick={reset}
             onMouseEnter={() => {
               setPreLabel(label);
-              setLabel("Resetear vista")
+              setLabel("Resetear vista");
             }}
             onMouseLeave={() => {
-              setLabel(preLabel)
+              setLabel(preLabel);
             }}
           >
             <>⌘</>
           </ControlButton>
           <ControlButton onClick={screenshot}
-            style={{
-              transform: 'rotate(180deg)',
-            }}
+            style={{ transform: 'rotate(180deg)' }}
             onMouseEnter={() => {
               setPreLabel(label);
-              setLabel("Descargar imagen")
+              setLabel("Descargar imagen");
             }}
             onMouseLeave={() => {
-              setLabel(preLabel)
+              setLabel(preLabel);
             }}
           >
             <>⏏︎</>
