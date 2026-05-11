@@ -8,6 +8,8 @@ import * as cienciaPolitica from './cienciaPolitica';
 import * as cienciasSociales from './cienciasSociales';
 import * as diseno from './diseno';
 import * as economia from './economia';
+import * as estudiosInternacionales from './estudiosInternacionales';
+import * as historia from './historia';
 
 export const carreras = [
     {
@@ -79,6 +81,20 @@ export const carreras = [
         nodes: economia.nodes,
         edges: economia.edges,
         year_labels: economia.year_labels,
+    },
+    {
+        id: 'estudios-internacionales',
+        name: 'Licenciatura en Estudios Internacionales',
+        nodes: estudiosInternacionales.nodes,
+        edges: estudiosInternacionales.edges,
+        year_labels: estudiosInternacionales.year_labels,
+    },
+    {
+        id: 'historia',
+        name: 'Licenciatura en Historia',
+        nodes: historia.nodes,
+        edges: historia.edges,
+        year_labels: historia.year_labels,
     },
 ];
 
